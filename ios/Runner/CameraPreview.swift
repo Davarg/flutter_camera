@@ -123,23 +123,25 @@ class CameraPreview: NSObject, FlutterTexture, AVCaptureVideoDataOutputSampleBuf
         connection.videoOrientation = .portrait
         connection.isVideoMirrored = true
         
-        if let newBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            let bytesPerRow = CVPixelBufferGetBytesPerRow(newBuffer)
-            CVPixelBufferLockBaseAddress(newBuffer, CVPixelBufferLockFlags(rawValue: 0))
+        if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            CVPixelBufferLockBaseAddress(imageBuffer, CVPixelBufferLockFlags(rawValue: 0))
             
-            if let baseAddress = CVPixelBufferGetBaseAddress(newBuffer) {
-                let length = CVPixelBufferGetDataSize(newBuffer)
-                
-                let data = Data(bytes: baseAddress, count: length)
-                let flutterData = FlutterStandardTypedData(bytes: data)
+            let bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer)
+            let width = CVPixelBufferGetWidth(imageBuffer)
+            let height = CVPixelBufferGetHeight(imageBuffer)
+            if let baseAddress = CVPixelBufferGetBaseAddress(imageBuffer) {
+                let data = NSData(bytes: baseAddress, length: bytesPerRow * height)
+                let flutterData = FlutterStandardTypedData(bytes: Data(bytes: data.bytes, count: data.length))
                 
                 self.eventSink?(["bytesPerRow": bytesPerRow,
-                                 "buffer": flutterData])
+                                 "buffer": flutterData,
+                                 "width": Double(width),
+                                 "height": Double(height)])
             }
             
-            CVPixelBufferUnlockBaseAddress(newBuffer, CVPixelBufferLockFlags(rawValue: 0))
+            CVPixelBufferUnlockBaseAddress(imageBuffer, CVPixelBufferLockFlags(rawValue: 0))
             
-            self.latestPixelBuffer = newBuffer as CVPixelBuffer
+            self.latestPixelBuffer = imageBuffer as CVPixelBuffer
             self.onFrameAvailable?()
         }
     }

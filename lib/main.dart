@@ -32,12 +32,11 @@ class _CameraAppState extends State<CameraApp> {
 
       _outputPlugin.handleData(
         data['buffer'],
-        Size(300, 300),
+        Size(data['width'], data['height']),
         data['bytesPerRow'],
       );
     });
   }
-
 
   @override
   void initState() {
@@ -63,9 +62,7 @@ class _CameraAppState extends State<CameraApp> {
         ),
         body: Stack(
           children: <Widget>[
-            SizedBox(
-              height: 300,
-              width: 300,
+            Container(
               child: _outputPlugin.isInitialized
                   ? Texture(
                       textureId: _outputPlugin.textureId,
@@ -74,16 +71,19 @@ class _CameraAppState extends State<CameraApp> {
                       color: Colors.black,
                     ),
             ),
-            SizedBox(
-              height: _previewHeight,
-              width: _previewWidth,
-              child: _cameraPlugin.isInitialized
-                  ? Texture(
-                      textureId: _cameraPlugin.textureId,
-                    )
-                  : Container(
-                      color: Colors.black,
-                    ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: SizedBox(
+                height: _previewHeight,
+                width: _previewWidth,
+                child: _cameraPlugin.isInitialized
+                    ? Texture(
+                        textureId: _cameraPlugin.textureId,
+                      )
+                    : Container(
+                        color: Colors.black,
+                      ),
+              ),
             ),
           ],
         ),

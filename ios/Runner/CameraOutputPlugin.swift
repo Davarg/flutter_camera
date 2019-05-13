@@ -39,16 +39,23 @@ class CameraOutputPlugin: NSObject {
                     var result: CVPixelBuffer? = nil
                     var b = buffer.data as NSData
                     
-                    CVPixelBufferCreateWithBytes(kCFAllocatorDefault,
-                                                 Int(width),
-                                                 Int(height),
-                                                 kCVPixelFormatType_32BGRA,
-                                                 &b,
-                                                 bytesPerRow,
-                                                 nil,
-                                                 nil,
-                                                 nil,
-                                                 &result)
+                    let dic = Dictionary<String, Any>()
+                    CVPixelBufferCreate(kCFAllocatorDefault,
+                                        Int(width),
+                                        Int(height),
+                                        kCVPixelFormatType_32BGRA,
+                                        [kCVPixelBufferIOSurfacePropertiesKey: dic] as CFDictionary,
+                                        &result)
+                    
+                    if let r = result {
+                        CVPixelBufferLockBaseAddress(r, CVPixelBufferLockFlags(rawValue: 0))
+                        
+                        if let baseAddress = CVPixelBufferGetBaseAddress(r) {
+                            memcpy(baseAddress, b.bytes, b.length)
+                        }
+                        
+                        CVPixelBufferUnlockBaseAddress(r, CVPixelBufferLockFlags(rawValue: 0))
+                    }
                     
                     self.output.latestPixelBuffer = result
                     
