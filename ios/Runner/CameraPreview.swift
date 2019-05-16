@@ -10,12 +10,13 @@ import UIKit
 import Flutter
 import AVFoundation
 
-class CameraPreview: NSObject, FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate, FlutterStreamHandler {
+class CameraPreview: NSObject, FlutterTexture, AVCaptureVideoDataOutputSampleBufferDelegate, FlutterStreamHandler, VideoCompressorDelegate {
     var onFrameAvailable: (() -> Void)? = nil
     
     private var eventSink: FlutterEventSink? = nil
-    
     private var eventChannel: FlutterEventChannel? = nil
+    
+    private let compressor = VideoCompressor()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let captureSession = AVCaptureSession()
     
@@ -24,9 +25,16 @@ class CameraPreview: NSObject, FlutterTexture, AVCaptureVideoDataOutputSampleBuf
     convenience init(withMessenger messenger: FlutterBinaryMessenger) {
         self.init()
         
+        self.compressor.delegate = self
+        
         self.eventChannel = FlutterEventChannel(name: "camera_data",
                                                 binaryMessenger: messenger)
         self.eventChannel?.setStreamHandler(self)
+    }
+    
+    func encodedData(_ pts: Double, data: NSData) {
+        self.eventSink?(["pts": pts,
+                         "data": data])
     }
     
     func onListen(withArguments arguments: Any?,
@@ -123,24 +131,9 @@ class CameraPreview: NSObject, FlutterTexture, AVCaptureVideoDataOutputSampleBuf
         connection.videoOrientation = .portrait
         connection.isVideoMirrored = true
         
+        self.compressor.encode(sampleBuffer)
+        
         if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-            CVPixelBufferLockBaseAddress(imageBuffer, CVPixelBufferLockFlags(rawValue: 0))
-            
-            let bytesPerRow = CVPixelBufferGetBytesPerRow(imageBuffer)
-            let width = CVPixelBufferGetWidth(imageBuffer)
-            let height = CVPixelBufferGetHeight(imageBuffer)
-            if let baseAddress = CVPixelBufferGetBaseAddress(imageBuffer) {
-                let data = NSData(bytes: baseAddress, length: bytesPerRow * height)
-                let flutterData = FlutterStandardTypedData(bytes: Data(bytes: data.bytes, count: data.length))
-                
-                self.eventSink?(["bytesPerRow": bytesPerRow,
-                                 "buffer": flutterData,
-                                 "width": Double(width),
-                                 "height": Double(height)])
-            }
-            
-            CVPixelBufferUnlockBaseAddress(imageBuffer, CVPixelBufferLockFlags(rawValue: 0))
-            
             self.latestPixelBuffer = imageBuffer as CVPixelBuffer
             self.onFrameAvailable?()
         }

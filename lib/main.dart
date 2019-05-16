@@ -1,7 +1,13 @@
+import 'dart:typed_data';
+
+import 'package:camera/nalu_type.dart';
 import 'package:flutter/material.dart';
 
 import './camera_output_plugin.dart';
 import './camera_preview_plugin.dart';
+import './rtp_packer.dart';
+import './rtp_unpacker.dart';
+import 'nalunit.dart';
 
 void main() => runApp(CameraApp());
 
@@ -19,6 +25,9 @@ class _CameraAppState extends State<CameraApp> {
   final CameraPreviewPlugin _cameraPlugin = CameraPreviewPlugin();
   final CameraOutputPlugin _outputPlugin = CameraOutputPlugin();
 
+  final RTPPacker _packer = RTPPacker();
+  final RTPUnpacker _unpacker = RTPUnpacker();
+
   Future<void> _initializePlugin() async {
     await _cameraPlugin.initialize();
     await _outputPlugin.initialize();
@@ -30,11 +39,31 @@ class _CameraAppState extends State<CameraApp> {
         .listen((dynamic event) {
       Map<dynamic, dynamic> data = event as Map<dynamic, dynamic>;
 
-      _outputPlugin.handleData(
-        data['buffer'],
-        Size(data['width'], data['height']),
-        data['bytesPerRow'],
-      );
+      _packer
+          .pack(
+        pts: data['pts'].toDouble(),
+        data: data['data'],
+      )
+          .then((List<ByteData> frames) {
+        for (ByteData item in frames) {
+          _unpacker.unpack(item).then((List<NALUnit> units) {
+            for (NALUnit unit in units) {
+              switch (unit.type.type) {
+                case NALUType.AVC_SPS:
+                  _outputPlugin.setSPS(unit.data);
+                  break;
+
+                case NALUType.AVC_PPS:
+                  _outputPlugin.setPPS(unit.data);
+                  break;
+
+                default:
+                  _outputPlugin.handleData(unit: unit);
+              }
+            }
+          });
+        }
+      });
     });
   }
 

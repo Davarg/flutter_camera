@@ -1,10 +1,15 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:camera/nalunit.dart';
 import 'package:flutter/services.dart';
 
+import './camera_method_codec.dart';
+
 class CameraOutputPlugin {
-  static final MethodChannel _channel = MethodChannel('camera_output_texture');
+  static final MethodChannel _channel = MethodChannel(
+    'camera_output_texture',
+    CameraMethodCodec(),
+  );
 
   int textureId;
 
@@ -16,14 +21,25 @@ class CameraOutputPlugin {
     return textureId;
   }
 
-  Future<void> handleData(Uint8List data, Size size, int bytesPerRow) =>
-      _channel.invokeMethod(
+  Future<void> handleData({unit: NALUnit}) => _channel.invokeMethod(
         'handle',
         {
-          'buffer': data,
-          'width': size.width,
-          'height': size.height,
-          'bytesPerRow': bytesPerRow,
+          'pts': unit.pts,
+          'data': unit.data,
+        },
+      );
+
+  Future<void> setPPS(Uint8List data) => _channel.invokeMethod(
+        'setPPS',
+        {
+          'data': data,
+        },
+      );
+
+  Future<void> setSPS(Uint8List data) => _channel.invokeMethod(
+        'setSPS',
+        {
+          'data': data,
         },
       );
 

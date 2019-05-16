@@ -10,19 +10,44 @@ import UIKit
 import Flutter
 import AVFoundation
 
-class CameraOutputPlugin: NSObject {
+class CameraOutputPlugin: NSObject, VideoDecompressorDelegate {
     private var registry: FlutterTextureRegistry!
     private var output: CameraOutput!
     private var textureId: Int64 = -1
+    private let decompressor = VideoDecompressor()
     
     convenience init(withRegistry registry: FlutterTextureRegistry) {
         self.init()
         
         self.registry = registry
+        self.decompressor.delegate = self
+    }
+    
+    func decodedData(_ data: CMSampleBuffer?) {
+        if let d = data {
+            if let imageBuffer = CMSampleBufferGetImageBuffer(d) {
+                self.output.latestPixelBuffer = imageBuffer as CVPixelBuffer
+                self.registry.textureFrameAvailable(self.textureId)
+            }
+        }
     }
     
     func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
+        case "setPPS":
+            if let args = call.arguments as? Dictionary<String, Any> {
+                if let buffer = args["data"] as? FlutterStandardTypedData {
+                    self.decompressor.setPPS(buffer.data as NSData)
+                }
+            }
+            
+        case "setSPS":
+            if let args = call.arguments as? Dictionary<String, Any> {
+                if let buffer = args["data"] as? FlutterStandardTypedData {
+                    self.decompressor.setSPS(buffer.data as NSData)
+                }
+            }
+            
         case "create":
             self.output = CameraOutput()
             
@@ -32,34 +57,9 @@ class CameraOutputPlugin: NSObject {
             
         case "handle":
             if let args = call.arguments as? Dictionary<String, Any> {
-                if let buffer = args["buffer"] as? FlutterStandardTypedData
-                    , let width = args["width"] as? Double
-                    , let height = args["height"] as? Double
-                    , let bytesPerRow = args["bytesPerRow"] as? Int {
-                    var result: CVPixelBuffer? = nil
-                    var b = buffer.data as NSData
-                    
-                    let dic = Dictionary<String, Any>()
-                    CVPixelBufferCreate(kCFAllocatorDefault,
-                                        Int(width),
-                                        Int(height),
-                                        kCVPixelFormatType_32BGRA,
-                                        [kCVPixelBufferIOSurfacePropertiesKey: dic] as CFDictionary,
-                                        &result)
-                    
-                    if let r = result {
-                        CVPixelBufferLockBaseAddress(r, CVPixelBufferLockFlags(rawValue: 0))
-                        
-                        if let baseAddress = CVPixelBufferGetBaseAddress(r) {
-                            memcpy(baseAddress, b.bytes, b.length)
-                        }
-                        
-                        CVPixelBufferUnlockBaseAddress(r, CVPixelBufferLockFlags(rawValue: 0))
-                    }
-                    
-                    self.output.latestPixelBuffer = result
-                    
-                    self.registry.textureFrameAvailable(self.textureId)
+                if let buffer = args["data"] as? FlutterStandardTypedData
+                    , let pts = args["pts"] as? Double {
+                    self.decompressor.decode(buffer.data as NSData, pts: pts)
                 }
             }
             
